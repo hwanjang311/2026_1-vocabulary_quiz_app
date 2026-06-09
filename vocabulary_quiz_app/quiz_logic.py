@@ -10,6 +10,7 @@ class Word:
     term: str
     meaning: str
     category: str #카테고리 필드 추가
+    language: str #언어 필드 추가
 
 
 def normalize_answer(text: str) -> str:
