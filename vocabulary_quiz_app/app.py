@@ -1,10 +1,25 @@
+
 from __future__ import annotations
 
 import random
+import sys
+import subprocess
+import threading  # 👈 발음 재생 스레드 처리를 위해 추가
 import tkinter as tk
 from tkinter import ttk, font
 
+# --- [자동 설치 로직] 라이브러리가 없으면 실행 시 자동 설치 ---
+REQUIRED_PACKAGES = ["gtts", "pygame"]
+
+for package in REQUIRED_PACKAGES:
+    try:
+        __import__(package)
+    except ImportError:
+        print(f"[{package}] 라이브러리가 없습니다. 자동으로 설치를 시작합니다...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+
 from vocabulary_quiz_app.quiz_logic import Word, check_answer, draw_word
+
 
 class VocabularyQuizApp:
     def __init__(self, root: tk.Tk, words: list[Word]) -> None:
@@ -15,10 +30,12 @@ class VocabularyQuizApp:
         self.checked = False
         self.score = 0
         self.total = 0
+
         self.default_font = font.nametofont("TkDefaultFont")
         self.default_font.configure(family="NanumGothic", size=12)
+
         root.title("Multi-Language Quiz")
-        root.geometry("420x380")  # UI 추가로 높이를 조금 더 늘림 (340 -> 380)
+        root.geometry("420x420")  # 버튼 추가를 위한 크기 조정 (380->420)
         root.resizable(False, False)
 
         self.word_var = tk.StringVar(value="단어를 불러오는 중...")
@@ -44,25 +61,28 @@ class VocabularyQuizApp:
         self.category_combobox.pack(side=tk.LEFT, padx=4)
         self.category_combobox.bind("<<ComboboxSelected>>", self.on_category_change)
 
-        # 초기 언어 설정에 맞춰 카테고리 목록 채우기
-        self.update_category_combobox()
-
-        # 하단 레이블 (영단어 -> 단어로 범용성 있게 수정)
+        # 단어 및 입력창
         ttk.Label(root, text="단어").pack(pady=(12, 4))
-
-        ###########################
         ttk.Label(root, textvariable=self.word_var, font=("NanumGothic", 24)).pack()
 
         self.answer_entry = ttk.Entry(root, font=("NanumGothic", 14))
         self.answer_entry.pack(pady=12, ipadx=6, ipady=4)
 
+        # 하단 버튼 영역(채점, 다음, 발음 듣기)
         buttons = ttk.Frame(root)
         buttons.pack(pady=6)
         self.check_button = ttk.Button(buttons, text="채점", command=self.check_current)
         self.check_button.pack(side=tk.LEFT, padx=6)
+        
         ttk.Button(buttons, text="다음", command=self.next_word).pack(
             side=tk.LEFT, padx=6
         )
+        # 🔊 발음 듣기 버튼 새로 배치
+        self.audio_button = ttk.Button(buttons, text="🔊 발음 듣기", command=self.listen_pronunciation)
+        self.audio_button.pack(side=tk.LEFT, padx=6)
+
+        ttk.Button(buttons, text="다음", command=self.next_word).pack(side=tk.LEFT, padx=6)
+
 
         ttk.Label(root, textvariable=self.feedback_var).pack(pady=8)
         ttk.Label(root, textvariable=self.score_var).pack()
@@ -115,7 +135,14 @@ class VocabularyQuizApp:
         self.reset_score()
         self.next_word()
 
+    # 단어 발음 재생 기능 추가
+    def listen_pronunciation(self) -> None:
+        """현재 출제된 단어의 발음을 백그라운드 쓰레드로 재생합니다."""
+        if self.current:
+            threading.Thread(target=play_pronunciation, args=(self.current,), daemon=True).start()
+
     def next_word(self) -> None:
+        """다음 단어를 무작위로 뽑아 출제합니다."""
         if not self.filtered_words:
             self.word_var.set("단어 없음")
             return
